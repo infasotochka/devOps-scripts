@@ -1,0 +1,34 @@
+name: db-backup
+
+on:
+  # Запуск по расписанию
+  # schedule:
+  # - cron: "0 21 * * *"
+  workflow_dispatch:
+
+jobs:
+  backup:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Login via SSH && push db backup to S3
+      uses: appleboy/ssh-action@v1.0.3
+      with:
+        host: ${{ secrets.DB_HOST }}
+        username: ${{ secrets.SERVER_USER }}
+        key: ${{ secrets.SSH_PRIVATE_KEY }}
+        script: |
+          export AWS_ACCESS_KEY_ID=${{ secrets.S3_ACCESS_KEY }}
+          export AWS_SECRET_ACCESS_KEY=${{ secrets.S3_SECRET_KEY }}
+          export AWS_DEFAULT_REGION=ru-central1
+          
+          # имя файла с годом, месяцем и днём
+          FILE="pg_$(date '+%Y-%m-%d').dump"
+          
+          # делаем бэкап базы postgres
+          sudo -u postgres pg_dump -F c postgres > "$FILE"
+          
+          # пуш в S3 Yandex
+          aws --endpoint-url=https://storage.yandexcloud.net s3 cp "$FILE" s3://${{ secrets.S3_BUCKET }}/backups/"$FILE"
+          
+          rm "$FILE"
